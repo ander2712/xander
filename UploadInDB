@@ -87,59 +87,6 @@ attributes = input.records()
 provider = layer.dataProvider()
 charset = provider.encoding()
 
-# Select attributes to import (remove PKUID if already exists):
-allAttrib = provider.attributeIndexes()
-fieldDesc = provider.fieldNameIndex("PKUID")
-if fieldDesc != -1:
-    print "PKUID already exists and will be replaced!"
-    del allAttrib[fieldDesc]  # remove PKUID Field
-    del fields[fieldDesc]  # remove PKUID Field
-
-if geometry:
-    fields.insert(0, "Geometry %s" % geometry)
-
-# Create new table in DB
-fields = ','.join(fields)
-if len(fields) > 0:
-    fields = ', %s' % fields
-header, data = executeQuery("""CREATE TABLE "%s" ( PKUID INTEGER PRIMARY KEY AUTOINCREMENT %s )"""
-                            % (tableName, fields))
-# if queryPb:
-#    return
-
-# Recover Geometry Column:
-if geometry:
-    header, data = executeQuery("""SELECT RecoverGeometryColumn("%s",'Geometry',%s,'%s',2)"""
-                                % (tableName, srid, geometry))
-
-# Recall every feature
-for feat in layer.getFeatures():
-    # Selected features:
-    if selected and feat.id()not in selected:
-        continue
-
-# PKUID and Geometry
-    autoValues = ['NULL']  # PKUID value
-    if geometry:
-        geom = feat.geometry()
-        WKB = geom.asWkb()
-        WKT = geom.exportToWkt()
-        autoValues.append('CastToMulti(GeomFromText("%s",%s))' % (WKT, srid))
-
-# Show all attributes and their values
-    lostValues = []
-    for val in allAttrib:  # All except PKUID
-        lostValues.append(feat[val])
-
-# Create line in DB table
-    if len(fields) > 0:
-        header, data = executeQuery("""INSERT INTO "%s" VALUES (%s,%s)"""
-                                    % (tableName, ','.join([unicode(value).encode('utf-8') for value in autoValues]),
-                                       ','.join('?'*len(lostValues))), tuple([unicode(value) for value in lostValues]))
-    else:  # no attribute Data
-        header, data = executeQuery("""INSERT INTO "%s" VALUES (%s)"""
-                                    % (tableName, ','.join([unicode(value).encode('utf-8') for value in autoValues])))
-
 # Close SpatiaLiteDB
 
 cur.close()
