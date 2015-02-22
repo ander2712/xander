@@ -1,1 +1,152 @@
 
+from pyspatialite import dbapi2 as sqlite3
+from qgis.core import *
+import qgis.core
+import sys
+import os
+import pdb
+import shapefile
+
+
+""" Create a new SpatiaLiteDB """
+
+# Set directory path and name
+sys.path.append("")
+filePath = ''
+workingDir = ''
+
+# Set file name
+DBname = 'DB_model'
+DBname = filePath + DBname + ".sqlite"
+nameTable = "modelTable"
+
+# creating/connecting SQL database object
+con = sqlite3.connect(DBname)
+# con = sqlite3.connect(":memory:") if you want write it in RAM
+con.enable_load_extension(True)
+cur = con.cursor()
+
+# Initialise spatial db
+# Insert a control for existing table or not
+cur.execute("SELECT InitSpatialMetaData();")
+
+# Initializing Spatial MetaData: GEOMETRY_COLUMNS and SPATIAL_REF_SYS
+sql = 'SELECT InitSpatialMetadata()'
+cur.execute(sql)
+
+
+""" Upload shapefile or layer (QgsMapLayer) into the DB, in tableName (string) with SRID """
+
+srid = None
+selected = False
+
+vlayer = qgis.utils.iface.mapCanvas().currentLayer()
+
+# Debugger
+# pdb.set_trace()
+
+# Get layers
+selected = []
+if selected == True:
+    if vlayer.selectedFeatureCount() == 0:  # The number of features that are selected in this layer
+        pop_up_info("No selected item in QGis layer: %s)" % vlayer.name())
+    return False
+    select = vlayer.selectedFeaturesIds()  # Return reference to identifiers of selected features
+
+# import shapeFile or vectorLayer to SpatiaLite using QgsVectorFileWriter
+app = QgsApplication(sys.argv, True)  # QGIS crash with False ???
+
+# need to locate .spatialite
+app.setPkgDataPath('/home/xander/workspace/Freewat/')
+
+# need to locate qgis libraries
+app.setPrefixPath('/usr/local')
+
+# need to locate c++ plugins (*.so)
+app.setPluginPath('')
+app.initQgis()
+
+# Create a memory layer
+memLayer = QgsVectorLayer("QString_path = None ", "QString_baseName = None ", "QString_providerLib = None ", True)
+QgsMapLayerRegistry.instance().addMapLayer(memLayer)
+
+# Read shapefile layer
+driver = vlayer.GetDriverByName('ESRI Shapefile')
+dataSource = driver.Open(".shp", 0)  # 0 means read-only, 1 means writeable
+layer = dataSource.GetLayer()
+
+# Import shapefile
+inputFile = shapefile.Reader(".shp")
+layers = [layer for layer in layer.list if layer.name() in layer]
+
+# import geometries and attributes of the layer in SpatialDB
+shapes = input.shapes()
+attributes = input.records()
+
+# Get data charset
+provider = layer.dataProvider()
+charset = provider.encoding()
+
+# Select attributes to import (remove PKUID if already exists):
+allAttrib = provider.attributeIndexes()
+fieldDesc = provider.fieldNameIndex("PKUID")
+if fieldDesc != -1:
+    print "PKUID already exists and will be replaced!"
+    del allAttrib[fieldDesc]  # remove PKUID Field
+    del fields[fieldDesc]  # remove PKUID Field
+
+if geometry:
+    fields.insert(0, "Geometry %s" % geometry)
+
+# Create new table in DB
+fields = ','.join(fields)
+if len(fields) > 0:
+    fields = ', %s' % fields
+header, data = executeQuery("""CREATE TABLE "%s" ( PKUID INTEGER PRIMARY KEY AUTOINCREMENT %s )"""
+                            % (tableName, fields))
+# if queryPb:
+#    return
+
+# Recover Geometry Column:
+if geometry:
+    header, data = executeQuery("""SELECT RecoverGeometryColumn("%s",'Geometry',%s,'%s',2)"""
+                                % (tableName, srid, geometry))
+
+# Recall every feature
+for feat in layer.getFeatures():
+    # Selected features:
+    if selected and feat.id()not in selected:
+        continue
+
+# PKUID and Geometry
+    autoValues = ['NULL']  # PKUID value
+    if geometry:
+        geom = feat.geometry()
+        WKB = geom.asWkb()
+        WKT = geom.exportToWkt()
+        autoValues.append('CastToMulti(GeomFromText("%s",%s))' % (WKT, srid))
+
+# Show all attributes and their values
+    lostValues = []
+    for val in allAttrib:  # All except PKUID
+        lostValues.append(feat[val])
+
+# Create line in DB table
+    if len(fields) > 0:
+        header, data = executeQuery("""INSERT INTO "%s" VALUES (%s,%s)"""
+                                    % (tableName, ','.join([unicode(value).encode('utf-8') for value in autoValues]),
+                                       ','.join('?'*len(lostValues))), tuple([unicode(value) for value in lostValues]))
+    else:  # no attribute Data
+        header, data = executeQuery("""INSERT INTO "%s" VALUES (%s)"""
+                                    % (tableName, ','.join([unicode(value).encode('utf-8') for value in autoValues])))
+
+# Close SpatiaLiteDB
+
+cur.close()
+# Save the changes
+con.commit()
+# Close connection
+con.close()
+# f.close()
+
+
