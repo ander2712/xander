@@ -57,7 +57,7 @@ if selected == True:
 app = QgsApplication(sys.argv, True)  # QGIS crash with False ???
 
 # need to locate .spatialite
-app.setPkgDataPath('/home/xander/workspace/Freewat/')
+app.setPkgDataPath('')
 
 # need to locate qgis libraries
 app.setPrefixPath('/usr/local')
