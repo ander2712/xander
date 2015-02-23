@@ -28,10 +28,11 @@ cur = con.cursor()
 
 # Initialise spatial db
 # Insert a control for existing table or not
-cur.execute("SELECT InitSpatialMetaData();")
+cur.execute("SELECT load_extension('libspatialite.so.5');")
+cur.execute("SELECT InitSpatialMetaData(1);")
 
 # Initializing Spatial MetaData: GEOMETRY_COLUMNS and SPATIAL_REF_SYS
-sql = 'SELECT InitSpatialMetadata()'
+sql = 'SELECT InitSpatialMetadata(1)'
 cur.execute(sql)
 
 
