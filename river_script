@@ -1,0 +1,45 @@
+
+
+import math
+from freewat_utils import *
+
+
+# Get the dataProvider objects for the layers
+river = QgsMapLayerRegistry.instance().mapLayersByName('line')[0].dataProvider()
+grid = QgsMapLayerRegistry.instance().mapLayersByName('grid')[0].dataProvider()
+riverOrigin = QgsPoint('')
+
+# Create a memory layer to store the result
+intersLayer = QgsVectorLayer("Polygon", "result", "memory")
+intersResult = intersLayer.dataProvider()
+QgsMapLayerRegistry.instance().addMapLayer(intersLayer)
+
+
+for feature in grid.getFeatures():
+  # Save the original geometry
+  geometry = QgsGeometry.fromPolygon(feature.geometry().asPolygon())
+
+  for line in river.getFeatures():
+    # Intersect the polygon with the line. If they intersect, the feature will contain one half of the split
+    t = feature.geometry().reshapeGeometry(line.geometry().asPolyline())
+    if (t==0):
+      # Create a new feature to hold the other half of the split
+      diff = QgsFeature()
+      # Calculate the difference between the original geometry and the first half of the split
+      diff.setGeometry(geometry.difference(feature.geometry()))
+      # Add the two halves of the split to the memory layer
+      intersResult.addFeatures([feature])
+      intersResult.addFeatures([diff])
+
+
+# Calculate distance from river origin and cell border intersection (with river)
+def euclidean_distance(intersResult, riverOrigin):
+    return math.sqrt((riverOrigin.x()-intersResult.x())**2 + (riverOrigin.y()-intersResult.y())**2)
+pt1 = QgsPoint('')
+pt2 = QgsPoint('')
+print euclidean_distance(pt1, pt2)
+
+
+def qgisdist(intersResult, riverOrigin):
+     return math.sqrt(intersResult.sqrDist(riverOrigin))
+print qgisdist(pt1, pt2)
